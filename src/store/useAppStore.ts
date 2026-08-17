@@ -4,10 +4,31 @@ import {
   BrandIdentity,
   WebsiteProfile,
   CompiledPromptResult,
-  LanguageCode
+  LanguageCode,
+  ContentPlanRow,
+  GSCMetricsSummary,
+  GA4MetricsSummary,
+  KeywordGapItem,
+  ContentGapItem,
+  CannibalizationItem,
+  ContentDecayItem,
+  SEOTaskItem,
+  IndustryEntityItem
 } from '../types';
-import { PRESET_TEMPLATES, SEO_PRESETS } from '../data/presets';
+import { PRESET_TEMPLATES } from '../data/presets';
 import { compileMasterSEOPrompt } from '../engine/promptCompiler';
+import { generateAutoContentPlanRow } from '../engine/autoContentIntelligence';
+import { STEEL_INDUSTRY_ENTITIES } from '../data/industryKnowledgeBase';
+import {
+  detectKeywordGaps,
+  detectContentGaps,
+  detectCannibalization,
+  detectContentDecay,
+  generateSEOTasks
+} from '../engine/seoOpportunityEngine';
+import { DEFAULT_SHEETS_CONFIG, GoogleSheetsConfig } from '../engine/sheetsEngine';
+
+const STORAGE_KEY = 'seo_master_builder_store_v4_ahaninja_matrix';
 
 const DEFAULT_BRAND: BrandIdentity = {
   id: 'brand-ahan-inja',
@@ -98,338 +119,604 @@ const DEFAULT_PROJECT: SEOProject = {
     ],
     lsiKeywords: [
       'استاندارد ملی ISIRI 3132',
-      'تنش تسلیم فولاد (Yield Strength)',
+      'تنش تسلیم و مقاومت کششی میلگرد',
       'آج دوکی و یکنواخت',
-      'بندیل میلگرد و تعداد شاخه',
-      'برگه آنالیز سرتیفیکیت کوپالن',
-      'کرایه حمل تریلی آهن و باسکول'
+      'بندیل میلگرد و ظرفیت تریلی',
+      'برگه آنالیز آزمایشگاهی و سرتیفیکیت',
+      'باسکول مبدا و مقصد'
     ],
-    entities: [
-      'ذوب آهن اصفهان (ESCO)',
-      'فولاد خراسان (نیشابور)',
-      'مجتمع فولاد ظفر بناب',
-      'فولاد کویر کاشان',
-      'آیین‌نامه بتن ایران (آبا)',
-      'جدول اشتال مهندسی (Stahl Table)'
-    ],
-    negativeKeywords: ['میلگرد بستر ارزان دست دوم دیوار', 'ضایعات آهن قراضه', 'فروش اقساطی بدون کارمزد']
+    forbiddenKeywords: ['میلگرد قراضه و غیراستاندارد', 'خرید آهن بدون فاکتور معتبر', 'ارزان‌ترین میلگرد خاورمیانه']
   },
-  serp: {
-    serpFeatures: ['Featured Snippet', 'People Also Ask', 'Table Rich Result', 'Image Pack'],
-    targetZeroClick: true,
-    featuredSnippetGoal: 'Table',
-    competitors: [
-      {
-        id: 'comp-1',
-        urlOrTitle: 'آهن‌مکان / دانشنامه خرید میلگرد',
-        strengths: 'جدول کامل سایزبندی و وزن',
-        weaknesses: 'عدم توضیح درباره هزینه‌های باسکول، باربری و نحوه استعلام پیش‌فاکتور رسمی با فاکتور معتبر',
-        wordCountEstimate: 2200
-      },
-      {
-        id: 'comp-2',
-        urlOrTitle: 'مرکز آهن / نکات مهم خرید میلگرد',
-        strengths: 'گرافیک و ویدیوهای معرفی',
-        weaknesses: 'متن کلی‌گویی دارد و فرمول‌های محاسبه تجربی و نکات بازرسی پای کار را ارائه نکرده است',
-        wordCountEstimate: 1800
-      }
+  contentStructure: {
+    targetWordCount: 3000,
+    readingTimeMinutes: 12,
+    h1Title: 'راهنمای جامع خرید میلگرد و تیرآهن از آهن اینجا؛ تحلیل فنی و جدول وزن اشتال کارخانجات',
+    headings: [
+      { id: 'h2-1', level: 'H2', text: 'میلگرد چیست و چرا انتخاب گرید استاندارد برای اسکلت بتنی حیاتی است؟', intent: 'تعریف فنی و معرفی انواع گرید A2, A3, A4' },
+      { id: 'h2-2', level: 'H2', text: 'جدول مقایسه وزن هر شاخه میلگرد کارخانجات برتر ایران با جدول اشتال مرجع', intent: 'ارائه جدول دقیق اشتال و مقایسه اصفهان، بناب، نیشابور و کاشان' },
+      { id: 'h2-3', level: 'H2', text: 'فرمول سریع کارگاهی محاسبه وزن میلگرد (فرمول ۱۶۲) به زبان ساده', intent: 'آموزش فرمول D²/162 و ارائه مثال‌های کاربردی سایز ۱۴ و ۱۶' },
+      { id: 'h2-4', level: 'H2', text: '۵ نکته کلیدی در تشخیص اصالت میلگرد و بررسی علائم اختصاری کارخانه‌ها', intent: 'معرفی مارک‌های ESCO, KSR, ZAFAR, KAVIR و پلاک بندیل' },
+      { id: 'h2-5', level: 'H2', text: 'بررسی هزینه‌های جانبی: کرایه حمل تریلی، هزینه باسکول و ارزش افزوده', intent: 'شفاف‌سازی هزینه‌های باربری و راهنمای بهینه‌سازی مسافت بارگیری' },
+      { id: 'h2-6', level: 'H2', text: 'مراحل گام‌به‌گام استعلام قیمت، صدور پیش‌فاکتور رسمی و خرید از آهن اینجا', intent: 'هدایت کاربر به قیف فروش و ثبت سفارش تلفنی یا آنلاین' },
+      { id: 'h2-7', level: 'H2', text: 'سؤالات متداول خریداران و پیمانکاران در خرید مقاطع فولادی', intent: 'پاسخ به سوالات پرتکرار و رفع ابهامات فنی و مالیاتی' }
     ],
-    paaQuestions: [
-      'بهترین کارخانه تولیدکننده میلگرد در ایران کدام است؟',
-      'چگونه وزن یک شاخه میلگرد ۱۲ متری را بدون ترازو و با فرمول حساب کنیم؟',
-      'تفاوت میلگرد A3 و A4 در پروژه‌های ساختمانی چیست؟',
-      'هر بندیل میلگرد چند شاخه و چند تن است و چطور تحویل گرفته می‌شود؟'
+    faqs: [
+      { id: 'faq-1', question: 'تفاوت میلگرد A2، A3 و A4 چیست و برای کدام بخش سازه استفاده می‌شوند؟', answer: 'میلگرد A2 با تنش تسلیم ۳۴۰ مگاپاسکال بیشتر برای خاموت‌ها و اتصالات استفاده می‌شود؛ در حالی که A3 با تنش تسلیم ۴۰۰ مگاپاسکال به عنوان آرماتور طولی تیر و ستون کاربرد دارد و نباید جوشکاری شود. میلگرد A4 با تنش ۵۰۰ مگاپاسکال مقاومت بالاتر با وزن بهینه‌تر ایجاد می‌کند.' },
+      { id: 'faq-2', question: 'چگونه وزن بار میلگرد را قبل و بعد از تخلیه کنترل کنیم؟', answer: 'تمامی محموله‌های ارسالی از آهن اینجا همراه با برگه باسکول دیجیتال و سرتیفیکیت کارخانه ارسال شده و پس از توزین روی باسکول استاندارد تخلیه تطبیق داده می‌شوند.' },
+      { id: 'faq-3', question: 'آیا خرید میلگرد از آهن اینجا شامل فاکتور رسمی ارزش افزوده می‌شود؟', answer: 'بله، تمامی معاملات در آهن اینجا با صدور فاکتور رسمی معتبر سامانه مودیان و احتساب ۱۰ درصد مالیات بر ارزش افزوده قانونی انجام می‌گیرد.' },
+      { id: 'faq-4', question: 'حداقل سفارش برای ارسال مستقیم از درب کارخانه چقدر است؟', answer: 'برای ارسال مستقیم از کارخانه حداقل یک تریلی (حدود ۲۲ تا ۲۴ تن) نیاز است. برای مقادیر کمتر، بارگیری از نزدیک‌ترین انبار آهن اینجا در شادآباد تهران یا اصفهان انجام می‌شود.' }
     ]
   },
-  topicalAuthority: {
-    contentRole: 'Pillar (محتوای جامع مرجع)',
-    parentPillarUrl: 'https://ahaninja.com/blog/rebar-buying-guide',
-    cannibalizationSafeguards: 'تمرکز این مقاله دقیقاً بر فرآیند انتخاب، استانداردهای فنی و خرید میلگرد است و نباید با صفحات جدول قیمت روزانه میلگرد هم‌پوشانی محتوایی داشته باشد.',
-    uniqueInformationGain: 'ارائه جدول مقایسه وزنی ۴ کارخانه برتر (اصفهان، بناب، نیشابور، کاشان) به همراه فرمول تجربی محاسبه وزن و فرم نمونه چک‌لیست بازرسی محموله در پای کار',
-    freshnessSignals: true
-  },
-  styleAndTone: {
-    tone: 'Authoritative',
-    pov: 'Second Person (شما)',
-    readingLevel: 'تخصصی و کارشناسی',
-    articleLength: '۲,۸۰۰ - ۳,۵۰۰ کلمه',
-    useHumor: false,
-    introHookStyle: 'Direct Problem Statement',
-    structureTemplates: {
-      requireFAQ: true,
-      requireSummaryBox: true,
-      requireComparisonTable: true,
-      requireChecklist: true,
-      requireKeyTakeaways: true
-    }
-  },
-  internalLinking: {
-    enabled: true,
-    strategy: 'Strict Manual URLs',
-    manualLinks: [
-      {
-        id: 'link-1',
-        targetUrl: 'https://ahaninja.com/prices/rebar',
-        suggestedAnchor: 'قیمت روز میلگرد',
-        anchorStrategy: 'Exact Match',
-        relevanceNote: 'ارجاع در بخش استعلام قیمت لحظه‌ای کارخانجات در آهن اینجا'
-      },
-      {
-        id: 'link-2',
-        targetUrl: 'https://ahaninja.com/tools/steel-weight-calculator',
-        suggestedAnchor: 'محاسبه آنلاین وزن میلگرد',
-        anchorStrategy: 'Partial / Phrase Match',
-        relevanceNote: 'ارجاع در بخش فرمول محاسبه وزن شاخه'
-      },
-      {
-        id: 'link-3',
-        targetUrl: 'https://ahaninja.com/prices/beam',
-        suggestedAnchor: 'قیمت تیرآهن',
-        anchorStrategy: 'Exact Match',
-        relevanceNote: 'ارجاع در بخش مقایسه سبد خرید سازه فلزی و بتنی'
-      }
+  linkingStrategy: {
+    internalLinks: [
+      { id: 'il-1', targetUrl: 'https://ahaninja.com/prices/rebar', anchorText: 'قیمت روز میلگرد', contextRequirement: 'در بخش استعلام آنلاین نرخ کارخانجات' },
+      { id: 'il-2', targetUrl: 'https://ahaninja.com/tools/steel-weight-calculator', anchorText: 'محاسبه آنلاین وزن میلگرد و جدول اشتال', contextRequirement: 'در بخش فرمول محاسبه وزن شاخه' },
+      { id: 'il-3', targetUrl: 'https://ahaninja.com/prices/beam', anchorText: 'قیمت روز تیرآهن و هاش', contextRequirement: 'در بخش مقایسه سازه اسکلت فلزی و بتنی' },
+      { id: 'il-4', targetUrl: 'https://ahaninja.com/blog/steel-market-analysis', anchorText: 'تحلیل هفتگی بازار آهن', contextRequirement: 'در بخش زمان‌بندی مناسب خرید عمده' }
     ],
-    maxInternalLinks: 5
+    externalLinks: [
+      { id: 'el-1', targetUrl: 'http://standard.isiri.gov.ir', sourceName: 'سازمان ملی استاندارد ایران (استاندارد ۳۱۳۲)', citationContext: 'در بخش الزامات فنی استاندارد مقاومت کششی' },
+      { id: 'el-2', targetUrl: 'https://inbr.ir', sourceName: 'دفتر مقررات ملی ساختمان (مبحث نهم)', citationContext: 'در بخش ضوابط طراحی سازه‌های بتن آرمه' }
+    ]
   },
-  externalCitations: [
+  aiImagePrompts: [
     {
-      id: 'ext-1',
-      sourceName: 'سازمان ملی استاندارد ایران (استاندارد ملی ISIRI 3132)',
-      sourceUrl: 'http://standard.isiri.gov.ir',
-      citationType: 'Government / Standard'
+      id: 'img-1',
+      title: 'تصویر شاخص هدر مقاله (Featured Hero)',
+      type: 'Hero Banner',
+      promptEn: 'Cinematic ultra-realistic 8K photograph of modern industrial steel distribution warehouse in Tehran, stacked bundles of deformed construction rebar (Grade A3) with authentic steel mill blue tags, overhead yellow gantry crane, dramatic golden hour natural skylight rays shining through steel beam structure, high depth of field, architectural photography style, 16:9 ratio.',
+      promptFa: 'نمای سینمایی از انبار مدرن توزیع میلگرد و بندیل‌های فولادی با نورپردازی طبیعی سوله و برچسب‌های مشخصات کارخانه',
+      aspectRatio: '16:9',
+      style: 'Photorealistic',
+      negativePrompt: 'blurry, cartoon, 3d render, distorted, low quality, rust, broken rebar',
+      altTextFa: 'نمای انبار مقاطع فولادی و بندیل‌های میلگرد استاندارد در بنگاه آهن اینجا',
+      captionFa: 'انبار مرکزی تامین و بارگیری انواع میلگرد و مقاطع فولادی ساختمانی در آهن اینجا'
+    }
+  ],
+  socialPrompts: {
+    telegram: {
+      enabled: true,
+      channelName: 'کانال رسمی اطلاع‌رسانی قیمت آهن اینجا',
+      tone: 'خبری، تحلیلی و فوری',
+      includePriceAlert: true,
+      customHashtags: ['#قیمت_میلگرد', '#بازار_آهن', '#آهن_اینجا', '#جدول_اشتال']
     },
-    {
-      id: 'ext-2',
-      sourceName: 'مقررات ملی ساختمان ایران (مبحث نهم - طرح و اجرای ساختمان‌های بتن آرمه)',
-      sourceUrl: 'https://inbr.ir',
-      citationType: 'Government / Standard'
+    instagram: {
+      enabled: true,
+      postFormat: 'اسلایدری (Carousel)',
+      visualHook: 'مقایسه تصویری وزن میلگرد اصفهان با استاندارد اشتال + فرمول محاسبه سریع در کارگاه',
+      targetEngagement: 'سیو (Save) و اشتراک‌گذاری بین مهندسان پروژه'
+    },
+    linkedin: {
+      enabled: true,
+      angle: 'تحلیل مهندسی و مدیریت زنجیره تامین در پروژه‌های عمرانی',
+      targetAudience: 'مدیران عامل شرکت‌های پیمانکاری، مهندسان مشاور و سرپرستان کارگاه'
     }
-  ],
-  visualElements: [
-    'تصویر شاخص با پرامپت DALL-E',
-    'جدول مقایسه یا مشخصات فنی',
-    'اینفوگرافیک / فلوچارت متنی',
-    'باکس نکته کلیدی / هشدار طلایی',
-    'چک‌لیست تعاملی مارک‌داون'
-  ],
-  schemaAndEEAT: {
-    schemaTypes: ['Article', 'FAQPage', 'HowTo', 'BreadcrumbList'],
+  },
+  conversionSetup: {
+    primaryCTA: {
+      type: 'Contact / Phone Call',
+      placement: 'End of Article + Sticky Floating Widget',
+      headline: 'استعلام فوری قیمت امروز و دریافت پیش‌فاکتور رسمی از کارشناسان آهن اینجا',
+      buttonText: 'دریافت مشاوره تخصصی و پیش‌فاکتور (۰۲۱-XXXXXXXX)',
+      targetActionUrl: 'tel:02100000000'
+    },
+    secondaryCTA: {
+      type: 'Price Inquiry',
+      placement: 'After Stahl Weight Table',
+      headline: 'می‌خواهید وزن بار پروژه خود را بر اساس جدول اشتال محاسبه کنید؟',
+      buttonText: 'ورود به محاسبه‌گر آنلاین وزن آهن‌آلات',
+      targetActionUrl: 'https://ahaninja.com/tools/steel-weight-calculator'
+    },
+    leadMagnetOffer: 'دانلود فایل PDF جدول کامل اشتال مهندسی و مشخصات میلگرد کارخانجات ایران'
+  },
+  eeatConfig: {
     authorName: 'مهندس محمدرضا سلیمانی',
-    authorTitle: 'کارشناس ارشد متالورژی و مشاور ارشد تامین فولاد در آهن اینجا',
-    authorBio: 'با بیش از ۱۴ سال سابقه در کنترل کیفیت کارخانجات ذوب، نظارت پروژه‌های عمرانی و تحلیل زنجیره تامین فولاد در ایران.',
-    authorLinkedInOrUrl: 'https://linkedin.com/in/reza-soleimani-steel',
-    includeExpertReviewBadge: true,
-    factCheckingSources: 'استاندارد ملی ۳۱۳۲ ایران، جدول اشتال و آنالیز متالوگرافی آزمایشگاه همکار استاندارد',
-    geoOptimizedForAI: true
+    authorRole: 'کارشناس ارشد متالورژی و مشاور ارشد زنجیره تامین مقاطع ساختمانی در آهن اینجا',
+    authorBio: 'با بیش از ۱۴ سال سابقه بازرسی کنترل کیفیت در کارخانجات ذوب آهن و مشاور تخصصی تامین آهن‌آلات بیش از ۵۰ پروژه انبوه‌سازی در کشور.',
+    editorialReviewedBy: 'واحد کنترل کیفیت فنی و بازرگانی آهن اینجا',
+    primaryFactSources: 'استاندارد ملی ۳۱۳۲ ایران، جدول اشتال مهندسی DIN و برگه‌های آنالیز متالوگرافی آزمایشگاه‌های همکار استاندارد',
+    lastFactCheckedDate: new Date().toISOString().split('T')[0]
   },
-  ctrAndCTA: {
-    metaTitleVariants: [
-      'راهنمای خرید میلگرد و تیرآهن؛ ۵ نکته حیاتی قبل از سفارش در آهن اینجا (۱۴۰۴)',
-      'چگونه میلگرد استاندارد بخریم؟ راهنمای کامل استعلام قیمت و جدول وزن کارخانه‌ها',
-      'راهنمای خرید میلگرد ذوب آهن و بناب + فرمول محاسبه وزن هر شاخه'
-    ],
-    metaDescription: 'راهنمای جامع خرید میلگرد از آهن اینجا: آموزش محاسبه وزن هر شاخه، بررسی تفاوت میلگرد A3 و A2، تشخیص اصالت کالا و استعلام مستقیم قیمت از کارخانه با فاکتور رسمی.',
-    urlSlug: 'rebar-buying-guide',
-    ctaType: 'Contact / Phone Call',
-    ctaHeadline: 'نیاز به استعلام فوری قیمت و دریافت پیش‌فاکتور رسمی دارید؟',
-    ctaButtonText: 'مشاوره رایگان و استعلام قیمت با کارشناسان آهن اینجا',
-    ctaPlacement: 'Mid-Content + End',
-    localCityOrProvince: 'سراسر ایران (تحویل در انبار تهران و اصفهان یا درب کارخانه)'
+  advancedTechnical: {
+    metaTitle: 'راهنمای خرید میلگرد و تیرآهن | جدول وزن استاندارد و استعلام قیمت | آهن اینجا',
+    metaDescription: 'راهنمای جامع خرید میلگرد و تیرآهن از آهن اینجا: بررسی مشخصات فنی کارخانجات برتر ایران، جدول دقیق وزن اشتال، نحوه محاسبه سریع و استعلام قیمت روز با فاکتور رسمی.',
+    canonicalUrl: 'https://ahaninja.com/blog/rebar-buying-guide',
+    targetLanguage: 'fa',
+    readingLevel: 'Intermediate (متوسط)',
+    schemaTypes: ['Article', 'FAQPage', 'HowTo', 'BreadcrumbList', 'Organization'],
+    openGraphCard: {
+      title: 'راهنمای جامع خرید میلگرد و تیرآهن؛ جدول وزن و استعلام قیمت',
+      description: 'نکات طلایی خرید میلگرد استاندارد با صدور فاکتور رسمی از آهن اینجا',
+      type: 'article'
+    }
   },
-  customDirectives: 'لطفاً در تمامی بخش‌ها مثال‌های عددی ملموس از پروژه‌های ساختمانی معمولی در ایران ذکر شود.',
+  aiOptimization: {
+    targetModel: 'Google Gemini 2.5 Pro / 3.7 Flash',
+    outputFormat: 'Clean Markdown',
+    temperature: 0.3,
+    antiSlopStrictness: 'Maximum',
+    enableEntitySalience: true,
+    preventHallucinations: true,
+    enforceCustomTables: true
+  },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
 };
 
-// Global Store State Holder
-interface GlobalState {
+// Initial 5 Curated Steel Content Plan Rows for AhanInja
+const INITIAL_CONTENT_PLAN_ROWS: ContentPlanRow[] = [
+  generateAutoContentPlanRow('راهنمای جامع خرید میلگرد برای ساختمان و اسکلت بتنی', DEFAULT_BRAND, DEFAULT_WEBSITE),
+  generateAutoContentPlanRow('جدول وزن میلگرد کارخانجات ایران و فرمول محاسبه اشتال', DEFAULT_BRAND, DEFAULT_WEBSITE),
+  generateAutoContentPlanRow('تفاوت ورق سیاه ST37 و ST52 مبارکه و اکسین اهواز', DEFAULT_BRAND, DEFAULT_WEBSITE),
+  generateAutoContentPlanRow('راهنمای خرید تیرآهن IPE و تفاوت آن با هاش HEA و HEB', DEFAULT_BRAND, DEFAULT_WEBSITE),
+  generateAutoContentPlanRow('نحوه تشخیص اصالت میلگرد و جدول علائم اختصاری کارخانه‌ها', DEFAULT_BRAND, DEFAULT_WEBSITE)
+];
+
+const INITIAL_KEYWORD_GAPS = detectKeywordGaps(INITIAL_CONTENT_PLAN_ROWS, false);
+const INITIAL_CONTENT_GAPS = detectContentGaps();
+const INITIAL_CANNIBALIZATIONS = detectCannibalization();
+const INITIAL_DECAYS = detectContentDecay();
+const INITIAL_TASKS = generateSEOTasks(
+  INITIAL_KEYWORD_GAPS,
+  INITIAL_CONTENT_GAPS,
+  INITIAL_CANNIBALIZATIONS,
+  INITIAL_DECAYS
+);
+
+export type AppView =
+  | 'content-plan'
+  | 'seo-dashboard'
+  | 'wizard'
+  | 'task-center'
+  | 'roadmap'
+  | 'copilot'
+  | 'knowledge-graph'
+  | 'integrations';
+
+interface AppState {
   projects: SEOProject[];
   currentProjectId: string;
+  currentBrandId: string;
+  currentWebsiteId: string;
   brands: BrandIdentity[];
   websites: WebsiteProfile[];
+  contentPlan: ContentPlanRow[];
+  activeContentRowId: string | null;
+  gscSummary: GSCMetricsSummary;
+  ga4Summary: GA4MetricsSummary;
+  sheetsConfig: GoogleSheetsConfig;
+  keywordGaps: KeywordGapItem[];
+  contentGaps: ContentGapItem[];
+  cannibalizations: CannibalizationItem[];
+  contentDecays: ContentDecayItem[];
+  seoTasks: SEOTaskItem[];
+  knowledgeGraphEntities: IndustryEntityItem[];
   activeStep: number;
-  activeView: 'wizard' | 'dashboard';
+  activeView: AppView;
   language: LanguageCode;
   isPromptPreviewOpen: boolean;
   isBrandModalOpen: boolean;
   isPresetsModalOpen: boolean;
+  isExcelImportModalOpen: boolean;
+  isSheetsSyncModalOpen: boolean;
+  isRowDetailDrawerOpen: boolean;
   generatedPromptResult: CompiledPromptResult | null;
-  notification: string | null;
+  notification: { message: string; type: 'success' | 'error' | 'info' } | null;
 }
 
-const STORAGE_KEY = 'seo_master_builder_store_v3_ahaninja';
+const initialGSC: GSCMetricsSummary = {
+  clicks: 48200,
+  impressions: 1240000,
+  ctr: 3.89,
+  avgPosition: 9.4,
+  clicksDiffPercent: 18.5,
+  impressionsDiffPercent: 24.2,
+  dateRange: '28d',
+  isConnected: false,
+  propertyUrl: 'https://ahaninja.com'
+};
 
-function loadInitialState(): GlobalState {
+const initialGA4: GA4MetricsSummary = {
+  organicUsers: 34200,
+  sessions: 52100,
+  engagementRate: 64.8,
+  conversions: 840,
+  conversionRate: 1.61,
+  revenue: 0,
+  dateRange: '28d',
+  isConnected: false,
+  propertyId: 'GA4-AHANINJA-PROD'
+};
+
+function loadInitialState(): AppState {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
       return {
-        projects: parsed.projects?.length ? parsed.projects : [DEFAULT_PROJECT],
+        projects: parsed.projects || [DEFAULT_PROJECT],
         currentProjectId: parsed.currentProjectId || DEFAULT_PROJECT.id,
-        brands: parsed.brands?.length ? parsed.brands : [DEFAULT_BRAND],
-        websites: parsed.websites?.length ? parsed.websites : [DEFAULT_WEBSITE],
+        currentBrandId: parsed.currentBrandId || DEFAULT_BRAND.id,
+        currentWebsiteId: parsed.currentWebsiteId || DEFAULT_WEBSITE.id,
+        brands: parsed.brands || [DEFAULT_BRAND],
+        websites: parsed.websites || [DEFAULT_WEBSITE],
+        contentPlan: parsed.contentPlan && parsed.contentPlan.length > 0 ? parsed.contentPlan : INITIAL_CONTENT_PLAN_ROWS,
+        activeContentRowId: parsed.activeContentRowId || null,
+        gscSummary: parsed.gscSummary || initialGSC,
+        ga4Summary: parsed.ga4Summary || initialGA4,
+        sheetsConfig: parsed.sheetsConfig || DEFAULT_SHEETS_CONFIG,
+        keywordGaps: parsed.keywordGaps || INITIAL_KEYWORD_GAPS,
+        contentGaps: parsed.contentGaps || INITIAL_CONTENT_GAPS,
+        cannibalizations: parsed.cannibalizations || INITIAL_CANNIBALIZATIONS,
+        contentDecays: parsed.contentDecays || INITIAL_DECAYS,
+        seoTasks: parsed.seoTasks || INITIAL_TASKS,
+        knowledgeGraphEntities: parsed.knowledgeGraphEntities || STEEL_INDUSTRY_ENTITIES,
         activeStep: parsed.activeStep || 1,
-        activeView: parsed.activeView || 'wizard',
+        activeView: parsed.activeView || 'content-plan',
         language: parsed.language || 'fa',
         isPromptPreviewOpen: false,
         isBrandModalOpen: false,
         isPresetsModalOpen: false,
+        isExcelImportModalOpen: false,
+        isSheetsSyncModalOpen: false,
+        isRowDetailDrawerOpen: false,
         generatedPromptResult: null,
         notification: null
       };
     }
-  } catch (e) {
-    console.error('Failed to load saved state from localStorage:', e);
+  } catch (err) {
+    console.error('Error loading stored state:', err);
   }
 
   return {
     projects: [DEFAULT_PROJECT],
     currentProjectId: DEFAULT_PROJECT.id,
+    currentBrandId: DEFAULT_BRAND.id,
+    currentWebsiteId: DEFAULT_WEBSITE.id,
     brands: [DEFAULT_BRAND],
     websites: [DEFAULT_WEBSITE],
+    contentPlan: INITIAL_CONTENT_PLAN_ROWS,
+    activeContentRowId: null,
+    gscSummary: initialGSC,
+    ga4Summary: initialGA4,
+    sheetsConfig: DEFAULT_SHEETS_CONFIG,
+    keywordGaps: INITIAL_KEYWORD_GAPS,
+    contentGaps: INITIAL_CONTENT_GAPS,
+    cannibalizations: INITIAL_CANNIBALIZATIONS,
+    contentDecays: INITIAL_DECAYS,
+    seoTasks: INITIAL_TASKS,
+    knowledgeGraphEntities: STEEL_INDUSTRY_ENTITIES,
     activeStep: 1,
-    activeView: 'wizard',
+    activeView: 'content-plan',
     language: 'fa',
     isPromptPreviewOpen: false,
     isBrandModalOpen: false,
     isPresetsModalOpen: false,
+    isExcelImportModalOpen: false,
+    isSheetsSyncModalOpen: false,
+    isRowDetailDrawerOpen: false,
     generatedPromptResult: null,
     notification: null
   };
 }
 
-let state: GlobalState = loadInitialState();
+let globalState: AppState = loadInitialState();
 const listeners = new Set<() => void>();
 
 function notify() {
   try {
-    const toPersist = {
-      projects: state.projects,
-      currentProjectId: state.currentProjectId,
-      brands: state.brands,
-      websites: state.websites,
-      activeStep: state.activeStep,
-      activeView: state.activeView,
-      language: state.language
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        projects: globalState.projects,
+        currentProjectId: globalState.currentProjectId,
+        brands: globalState.brands,
+        websites: globalState.websites,
+        contentPlan: globalState.contentPlan,
+        activeContentRowId: globalState.activeContentRowId,
+        gscSummary: globalState.gscSummary,
+        ga4Summary: globalState.ga4Summary,
+        sheetsConfig: globalState.sheetsConfig,
+        keywordGaps: globalState.keywordGaps,
+        contentGaps: globalState.contentGaps,
+        cannibalizations: globalState.cannibalizations,
+        contentDecays: globalState.contentDecays,
+        seoTasks: globalState.seoTasks,
+        knowledgeGraphEntities: globalState.knowledgeGraphEntities,
+        activeStep: globalState.activeStep,
+        activeView: globalState.activeView,
+        language: globalState.language
+      })
+    );
   } catch (e) {
-    console.warn('LocalStorage save error:', e);
+    console.error('Failed to save to localStorage', e);
   }
   listeners.forEach(l => l());
 }
 
 export function useAppStore() {
-  const [, setTick] = useState(0);
+  const [state, setState] = useState<AppState>(globalState);
 
   useEffect(() => {
-    const listener = () => setTick(t => t + 1);
-    listeners.add(listener);
+    const handler = () => setState({ ...globalState });
+    listeners.add(handler);
     return () => {
-      listeners.delete(listener);
+      listeners.delete(handler);
     };
   }, []);
 
-  const currentProject = state.projects.find(p => p.id === state.currentProjectId) || state.projects[0] || DEFAULT_PROJECT;
-  const currentBrand = state.brands.find(b => b.id === currentProject.brandId) || state.brands[0] || DEFAULT_BRAND;
-  const currentWebsite = state.websites.find(w => w.id === currentProject.websiteId) || state.websites[0] || DEFAULT_WEBSITE;
+  const currentProject =
+    state.projects.find(p => p.id === state.currentProjectId) || state.projects[0] || DEFAULT_PROJECT;
+
+  const currentBrand =
+    state.brands.find(b => b.id === currentProject.brandId) || state.brands[0] || DEFAULT_BRAND;
+
+  const currentWebsite =
+    state.websites.find(w => w.id === currentProject.websiteId) || state.websites[0] || DEFAULT_WEBSITE;
+
+  const activeContentRow =
+    state.contentPlan.find(r => r.id === state.activeContentRowId) || null;
+
+  // View Navigation
+  const setActiveView = (view: AppView) => {
+    globalState.activeView = view;
+    notify();
+  };
 
   const setActiveStep = (step: number) => {
-    state.activeStep = Math.max(1, Math.min(12, step));
+    globalState.activeStep = Math.max(1, Math.min(12, step));
     notify();
   };
 
   const nextStep = () => {
-    setActiveStep(state.activeStep + 1);
+    if (globalState.activeStep < 12) {
+      globalState.activeStep += 1;
+      notify();
+    }
   };
 
   const prevStep = () => {
-    setActiveStep(state.activeStep - 1);
+    if (globalState.activeStep > 1) {
+      globalState.activeStep -= 1;
+      notify();
+    }
   };
 
-  const setActiveView = (view: 'wizard' | 'dashboard') => {
-    state.activeView = view;
+  // Notifications
+  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    globalState.notification = { message, type };
     notify();
-  };
-
-  const setLanguage = (lang: LanguageCode) => {
-    state.language = lang;
-    notify();
-  };
-
-  const setPromptPreviewOpen = (open: boolean) => {
-    state.isPromptPreviewOpen = open;
-    notify();
-  };
-
-  const setBrandModalOpen = (open: boolean) => {
-    state.isBrandModalOpen = open;
-    notify();
-  };
-
-  const setPresetsModalOpen = (open: boolean) => {
-    state.isPresetsModalOpen = open;
-    notify();
-  };
-
-  const showNotification = (msg: string) => {
-    state.notification = msg;
-    notify();
+    setTimeout(() => {
+      if (globalState.notification?.message === message) {
+        globalState.notification = null;
+        notify();
+      }
+    }, 4500);
   };
 
   const clearNotification = () => {
-    state.notification = null;
+    globalState.notification = null;
     notify();
   };
 
-  const updateCurrentProject = (updater: Partial<SEOProject> | ((prev: SEOProject) => Partial<SEOProject>)) => {
-    state.projects = state.projects.map(p => {
-      if (p.id === currentProject.id) {
-        const changes = typeof updater === 'function' ? updater(p) : updater;
-        return { ...p, ...changes, updatedAt: new Date().toISOString() };
+  // Content Plan Matrix Actions (The 50-column Source of Truth)
+  const addContentPlanRow = (title: string) => {
+    const newRow = generateAutoContentPlanRow(title, currentBrand, currentWebsite);
+    globalState.contentPlan = [newRow, ...globalState.contentPlan];
+    showNotification(`محتوای جدید «${title}» با ۵۰ فیلد هوشمند به جدول اضافه شد.`, 'success');
+    notify();
+    return newRow;
+  };
+
+  const updateContentPlanRow = (id: string, updates: Partial<ContentPlanRow>) => {
+    globalState.contentPlan = globalState.contentPlan.map(r => {
+      if (r.id === id) {
+        return {
+          ...r,
+          ...updates,
+          lastUpdated: new Date().toISOString()
+        };
       }
-      return p;
+      return r;
     });
     notify();
   };
 
-  const selectProject = (id: string) => {
-    state.currentProjectId = id;
+  const deleteContentPlanRow = (id: string) => {
+    globalState.contentPlan = globalState.contentPlan.filter(r => r.id !== id);
+    if (globalState.activeContentRowId === id) {
+      globalState.activeContentRowId = null;
+      globalState.isRowDetailDrawerOpen = false;
+    }
+    showNotification('ردیف محتوا حذف شد.', 'info');
     notify();
   };
 
-  const createProject = (title = 'پروژه جدید سئو', brandId?: string, websiteId?: string) => {
+  const toggleFieldLock = (rowId: string, fieldName: string) => {
+    globalState.contentPlan = globalState.contentPlan.map(r => {
+      if (r.id === rowId) {
+        const locked = { ...(r.isLockedFields || {}) };
+        locked[fieldName] = !locked[fieldName];
+        return { ...r, isLockedFields: locked };
+      }
+      return r;
+    });
+    notify();
+  };
+
+  const batchGenerateRows = async (ids: string[]) => {
+    showNotification(`تولید و تکمیل هوشمند ${ids.length} ردیف آغاز شد...`, 'info');
+    globalState.contentPlan = globalState.contentPlan.map(r => {
+      if (ids.includes(r.id)) {
+        return generateAutoContentPlanRow(r.title, currentBrand, currentWebsite, r);
+      }
+      return r;
+    });
+    showNotification(`تمامی ${ids.length} ردیف با موفقیت بهینه‌سازی و تولید شدند.`, 'success');
+    notify();
+  };
+
+  const importContentPlanRows = (rows: ContentPlanRow[]) => {
+    globalState.contentPlan = [...rows, ...globalState.contentPlan];
+    showNotification(`${rows.length} عنوان محتوا با موفقیت از اکسل وارد و پردازش شد.`, 'success');
+    notify();
+  };
+
+  const setActiveContentRowId = (id: string | null) => {
+    globalState.activeContentRowId = id;
+    globalState.isRowDetailDrawerOpen = id !== null;
+    notify();
+  };
+
+  // Convert a ContentPlanRow into full active project for Wizard and 1-click Prompt generation
+  const loadRowIntoWizard = (row: ContentPlanRow) => {
+    const updatedProj: SEOProject = {
+      ...currentProject,
+      id: 'proj-' + row.id,
+      articleTitle: row.title,
+      topic: row.topic || row.title,
+      primaryKeyword: row.primaryKeyword,
+      keywords: {
+        ...currentProject.keywords,
+        primaryKeyword: row.primaryKeyword,
+        secondaryKeywords: row.secondaryKeywords,
+        lsiKeywords: row.lsiKeywords
+      },
+      contentStructure: {
+        ...currentProject.contentStructure,
+        targetWordCount: typeof row.wordCount === 'number' ? row.wordCount : 3000,
+        h1Title: row.h1,
+        headings: row.h2.map((h, i) => ({ id: `h2-${i}`, level: 'H2', text: h, intent: 'پوشش هدف جستجو' })),
+        faqs: row.faq.map((f, i) => ({ id: `faq-${i}`, question: f.question, answer: f.answer || '' }))
+      },
+      aiImagePrompts: row.imagePrompts && row.imagePrompts.length > 0 ? row.imagePrompts : currentProject.aiImagePrompts
+    };
+
+    globalState.projects = [updatedProj, ...globalState.projects.filter(p => p.id !== updatedProj.id)];
+    globalState.currentProjectId = updatedProj.id;
+    globalState.activeView = 'wizard';
+    showNotification(`محتوای «${row.title}» در ویزارد ۱۲ مرحله‌ای بارگذاری شد.`, 'success');
+    notify();
+  };
+
+  // Integration & SEO Analytics Toggles
+  const toggleIntegration = (type: 'gsc' | 'ga4' | 'sheets', connected: boolean) => {
+    if (type === 'gsc') {
+      globalState.gscSummary = { ...globalState.gscSummary, isConnected: connected, lastSyncedAt: new Date().toISOString() };
+    } else if (type === 'ga4') {
+      globalState.ga4Summary = { ...globalState.ga4Summary, isConnected: connected, lastSyncedAt: new Date().toISOString() };
+    } else if (type === 'sheets') {
+      globalState.sheetsConfig = { ...globalState.sheetsConfig, isConnected: connected, lastSyncedAt: new Date().toISOString() };
+    }
+    showNotification(`وضعیت اتصال سرویس ${type.toUpperCase()} تغییر یافت.`, 'info');
+    notify();
+  };
+
+  const updateTaskStatus = (taskId: string, status: SEOTaskItem['status']) => {
+    globalState.seoTasks = globalState.seoTasks.map(t => (t.id === taskId ? { ...t, status } : t));
+    notify();
+  };
+
+  const addCustomTask = (task: Omit<SEOTaskItem, 'id' | 'createdAt'>) => {
+    const newTask: SEOTaskItem = {
+      ...task,
+      id: 'task-custom-' + Date.now(),
+      createdAt: new Date().toISOString()
+    };
+    globalState.seoTasks = [newTask, ...globalState.seoTasks];
+    showNotification('تسک جدید سئو ثبت شد.', 'success');
+    notify();
+  };
+
+  // Modals Toggles
+  const setExcelImportModalOpen = (open: boolean) => {
+    globalState.isExcelImportModalOpen = open;
+    notify();
+  };
+
+  const setSheetsSyncModalOpen = (open: boolean) => {
+    globalState.isSheetsSyncModalOpen = open;
+    notify();
+  };
+
+  const setRowDetailDrawerOpen = (open: boolean) => {
+    globalState.isRowDetailDrawerOpen = open;
+    if (!open) globalState.activeContentRowId = null;
+    notify();
+  };
+
+  const setPromptPreviewOpen = (open: boolean) => {
+    globalState.isPromptPreviewOpen = open;
+    notify();
+  };
+
+  const setBrandModalOpen = (open: boolean) => {
+    globalState.isBrandModalOpen = open;
+    notify();
+  };
+
+  const setPresetsModalOpen = (open: boolean) => {
+    globalState.isPresetsModalOpen = open;
+    notify();
+  };
+
+  const addBrand = (brand: BrandIdentity) => {
+    globalState.brands = [brand, ...globalState.brands];
+    globalState.currentBrandId = brand.id;
+    showNotification(`برند «${brand.name}» با موفقیت افزوده شد.`, 'success');
+    notify();
+  };
+
+  const deleteBrand = (brandId: string) => {
+    if (globalState.brands.length <= 1) {
+      showNotification('حداقل یک برند باید در سیستم باقی بماند.', 'error');
+      return;
+    }
+    globalState.brands = globalState.brands.filter(b => b.id !== brandId);
+    if (globalState.currentBrandId === brandId) {
+      globalState.currentBrandId = globalState.brands[0].id;
+    }
+    showNotification('برند حذف شد.', 'info');
+    notify();
+  };
+
+  const selectProject = (projectId: string) => {
+    globalState.currentProjectId = projectId;
+    notify();
+  };
+
+  const createProject = (title?: string) => {
     const newProj: SEOProject = {
       ...DEFAULT_PROJECT,
       id: 'proj-' + Date.now(),
-      articleTitle: title,
-      topic: title,
-      brandId: brandId || state.brands[0]?.id || DEFAULT_BRAND.id,
-      websiteId: websiteId || state.websites[0]?.id || DEFAULT_WEBSITE.id,
-      primaryKeyword: title.slice(0, 30),
+      articleTitle: title || 'پروژه جدید سئو',
+      topic: title || 'موضوع مقاله سئو',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    state.projects = [newProj, ...state.projects];
-    state.currentProjectId = newProj.id;
-    state.activeStep = 1;
+    globalState.projects = [newProj, ...globalState.projects];
+    globalState.currentProjectId = newProj.id;
+    showNotification('پروژه جدید سئو با موفقیت ایجاد شد.', 'success');
     notify();
     return newProj;
   };
 
-  const deleteProject = (id: string) => {
-    if (state.projects.length <= 1) return;
-    state.projects = state.projects.filter(p => p.id !== id);
-    if (state.currentProjectId === id) {
-      state.currentProjectId = state.projects[0].id;
+  const deleteProject = (projectId: string) => {
+    if (globalState.projects.length <= 1) {
+      showNotification('حداقل یک پروژه باید در سیستم باقی بماند.', 'error');
+      return;
     }
+    globalState.projects = globalState.projects.filter(p => p.id !== projectId);
+    if (globalState.currentProjectId === projectId) {
+      globalState.currentProjectId = globalState.projects[0].id;
+    }
+    showNotification('پروژه با موفقیت حذف شد.', 'info');
     notify();
   };
 
-  const cloneProject = (id: string) => {
-    const target = state.projects.find(p => p.id === id);
-    if (!target) return;
+  const cloneProject = (projectId: string) => {
+    const target = globalState.projects.find(p => p.id === projectId) || currentProject;
     const cloned: SEOProject = {
       ...target,
       id: 'proj-' + Date.now(),
@@ -437,47 +724,80 @@ export function useAppStore() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    state.projects = [cloned, ...state.projects];
-    state.currentProjectId = cloned.id;
+    globalState.projects = [cloned, ...globalState.projects];
+    globalState.currentProjectId = cloned.id;
+    showNotification('پروژه سئو با موفقیت تکثیر شد.', 'success');
     notify();
-    showNotification('پروژه با موفقیت تکثیر شد.');
+  };
+
+  const updateBrand = (brandId: string, updates: Partial<BrandIdentity>) => {
+    globalState.brands = globalState.brands.map(b => {
+      if (b.id === brandId) {
+        return { ...b, ...updates, updatedAt: new Date().toISOString() };
+      }
+      return b;
+    });
+    notify();
+  };
+
+  const selectBrand = (brandId: string) => {
+    globalState.currentBrandId = brandId;
+    notify();
+  };
+
+  const updateWebsite = (websiteId: string, updates: Partial<WebsiteProfile>) => {
+    globalState.websites = globalState.websites.map(w => {
+      if (w.id === websiteId) {
+        return { ...w, ...updates };
+      }
+      return w;
+    });
+    notify();
+  };
+
+  const selectWebsite = (websiteId: string) => {
+    globalState.currentWebsiteId = websiteId;
+    notify();
   };
 
   const applyPreset = (presetId: string) => {
     const preset = PRESET_TEMPLATES.find(p => p.id === presetId);
-    if (!preset) return;
-    updateCurrentProject(prev => ({
-      ...preset.defaults,
-      articleTitle: preset.defaults.articleTitle || prev.articleTitle,
-      topic: preset.defaults.topic || prev.topic,
-      contentType: preset.contentType || prev.contentType,
-      primaryKeyword: preset.defaults.primaryKeyword || prev.primaryKeyword
-    }));
+    if (preset) {
+      const updated: SEOProject = {
+        ...currentProject,
+        articleTitle: preset.nameFa || preset.name,
+        topic: preset.nameFa || preset.name,
+        contentType: preset.contentType as any,
+        primaryKeyword: preset.primaryKeyword || currentProject.primaryKeyword,
+        keywords: {
+          ...currentProject.keywords,
+          primaryKeyword: preset.primaryKeyword || currentProject.keywords.primaryKeyword,
+          secondaryKeywords: preset.secondaryKeywords || currentProject.keywords.secondaryKeywords
+        },
+        styleAndTone: {
+          ...currentProject.styleAndTone,
+          articleLength: preset.articleLength || currentProject.styleAndTone.articleLength
+        }
+      };
+      globalState.projects = globalState.projects.map(p => (p.id === currentProject.id ? updated : p));
+      showNotification(`الگوی «${preset.nameFa || preset.name}» با موفقیت اعمال شد.`, 'success');
+      notify();
+    }
   };
 
-  const addBrand = (brand: BrandIdentity) => {
-    state.brands = [...state.brands, brand];
+  const updateCurrentProject = (updates: Partial<SEOProject>) => {
+    globalState.projects = globalState.projects.map(p => {
+      if (p.id === currentProject.id) {
+        return { ...p, ...updates, updatedAt: new Date().toISOString() };
+      }
+      return p;
+    });
     notify();
-  };
-
-  const updateBrand = (id: string, updates: Partial<BrandIdentity>) => {
-    state.brands = state.brands.map(b => b.id === id ? { ...b, ...updates } : b);
-    notify();
-  };
-
-  const deleteBrand = (id: string) => {
-    if (state.brands.length <= 1) return;
-    state.brands = state.brands.filter(b => b.id !== id);
-    notify();
-  };
-
-  const selectBrand = (id: string) => {
-    updateCurrentProject({ brandId: id });
   };
 
   const compilePrompt = () => {
     const res = compileMasterSEOPrompt(currentProject, currentBrand, currentWebsite);
-    state.generatedPromptResult = res;
+    globalState.generatedPromptResult = res;
     notify();
     return res;
   };
@@ -490,36 +810,66 @@ export function useAppStore() {
     currentWebsite,
     brands: state.brands,
     websites: state.websites,
+    contentPlan: state.contentPlan,
+    activeContentRowId: state.activeContentRowId,
+    activeContentRow,
+    gscSummary: state.gscSummary,
+    ga4Summary: state.ga4Summary,
+    sheetsConfig: state.sheetsConfig,
+    keywordGaps: state.keywordGaps,
+    contentGaps: state.contentGaps,
+    cannibalizations: state.cannibalizations,
+    contentDecays: state.contentDecays,
+    seoTasks: state.seoTasks,
+    knowledgeGraphEntities: state.knowledgeGraphEntities,
     activeStep: state.activeStep,
     activeView: state.activeView,
     language: state.language,
     isPromptPreviewOpen: state.isPromptPreviewOpen,
     isBrandModalOpen: state.isBrandModalOpen,
     isPresetsModalOpen: state.isPresetsModalOpen,
+    isExcelImportModalOpen: state.isExcelImportModalOpen,
+    isSheetsSyncModalOpen: state.isSheetsSyncModalOpen,
+    isRowDetailDrawerOpen: state.isRowDetailDrawerOpen,
     generatedPromptResult: state.generatedPromptResult,
     notification: state.notification,
 
     // Actions
+    setActiveView,
     setActiveStep,
     nextStep,
     prevStep,
-    setActiveView,
-    setLanguage,
+    showNotification,
+    clearNotification,
+    addContentPlanRow,
+    updateContentPlanRow,
+    deleteContentPlanRow,
+    toggleFieldLock,
+    batchGenerateRows,
+    importContentPlanRows,
+    setActiveContentRowId,
+    loadRowIntoWizard,
+    toggleIntegration,
+    updateTaskStatus,
+    addCustomTask,
+    setExcelImportModalOpen,
+    setSheetsSyncModalOpen,
+    setRowDetailDrawerOpen,
     setPromptPreviewOpen,
     setBrandModalOpen,
     setPresetsModalOpen,
-    showNotification,
-    clearNotification,
-    updateCurrentProject,
-    selectProject,
-    createProject,
-    deleteProject,
-    cloneProject,
     applyPreset,
     addBrand,
     updateBrand,
     deleteBrand,
     selectBrand,
+    updateWebsite,
+    selectWebsite,
+    selectProject,
+    createProject,
+    deleteProject,
+    cloneProject,
+    updateCurrentProject,
     compilePrompt
   };
 }

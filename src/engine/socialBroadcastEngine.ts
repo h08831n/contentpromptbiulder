@@ -76,3 +76,5 @@ ${website}/blog/${project.ctrAndCTA.urlSlug || 'rebar-buying-guide'}
     newsletterSnippet
   };
 }
+
+export const generateSocialBroadcast = generateSocialBroadcastCopy;

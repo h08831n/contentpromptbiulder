@@ -27,7 +27,8 @@ export type BrandVoice =
   | 'Friendly'
   | 'Sales-Oriented'
   | 'Technical'
-  | 'Journalistic';
+  | 'Journalistic'
+  | 'Expert';
 
 export interface BrandIdentity {
   id: string;
@@ -39,29 +40,57 @@ export interface BrandIdentity {
   businessDescription: string;
   usp: string; // Unique Selling Proposition
   brandPositioning: string;
-  productsServices: string[];
-  targetAudienceDefaults: string;
+  productsServices: any[];
+  targetAudienceDefaults?: string;
+  targetAudience?: string;
+  brandValues?: string[];
   forbiddenClaims: string[];
   forbiddenTerms: string[];
-  preferredTerms: { original: string; preferred: string }[];
+  preferredTerms: any[];
+  competitors?: string[];
+  mainLocations?: string[];
+  socialProfiles?: any[];
+  contactInfo?: {
+    phone?: string;
+    email?: string;
+    address?: string;
+  };
   knowledgeBase: {
-    expertise: string;
-    certifications: string[];
-    editorialGuidelines: string;
+    aboutBrand?: string;
+    companyHistory?: string;
+    expertise?: string;
+    industriesServed?: string;
+    certifications?: string[];
+    awards?: string[];
+    editorialGuidelines?: string;
+    contentRules?: string[];
   };
   createdAt: string;
+  updatedAt?: string;
 }
+
+export type Brand = BrandIdentity;
 
 export interface WebsiteProfile {
   id: string;
+  brandId?: string;
+  name?: string;
+  siteName?: string;
   domain: string;
-  siteName: string;
-  niche: string;
-  defaultLanguage: LanguageCode;
-  primaryTargetCountry: string;
-  existingUrls: { url: string; title: string; mainKeyword: string }[];
-  permalinkStructure: string;
-  hasSitemap: boolean;
+  url?: string;
+  language?: LanguageCode;
+  niche?: string;
+  country?: string;
+  currency?: string;
+  mainCategory?: string;
+  websiteType?: string;
+  defaultLanguage?: LanguageCode;
+  primaryTargetCountry?: string;
+  sitemapUrl?: string;
+  existingUrls: { id?: string; url: string; title: string; mainKeyword?: string; category?: string }[];
+  permalinkStructure?: string;
+  hasSitemap?: boolean;
+  createdAt?: string;
 }
 
 export type ContentType =
@@ -107,8 +136,9 @@ export interface KeywordMatrix {
   secondaryKeywords: string[];
   longTailKeywords: string[];
   lsiKeywords: string[];
-  entities: string[];
-  negativeKeywords: string[];
+  entities?: string[];
+  negativeKeywords?: string[];
+  forbiddenKeywords?: string[];
 }
 
 export interface CompetitorAnalysisItem {
@@ -211,6 +241,20 @@ export interface CTRAndCTAConfig {
   localCityOrProvince?: string;
 }
 
+export interface PresetTemplate {
+  id: string;
+  name: string;
+  nameFa?: string;
+  description: string;
+  category: string;
+  articleLength: string;
+  contentType: ContentType | string;
+  intent: SearchIntentType | string;
+  primaryKeyword?: string;
+  secondaryKeywords?: string[];
+  defaults?: any;
+}
+
 export interface SEOProject {
   id: string;
   articleTitle: string;
@@ -222,17 +266,26 @@ export interface SEOProject {
   primaryKeyword: string;
   searchIntent: SearchIntentConfig;
   keywords: KeywordMatrix;
-  serp: SERPConfig;
-  topicalAuthority: TopicalAuthorityConfig;
-  styleAndTone: StyleAndToneConfig;
-  internalLinking: InternalLinkingConfig;
-  externalCitations: ExternalCitationItem[];
-  visualElements: VisualElementType[];
-  schemaAndEEAT: SchemaAndEEATConfig;
-  ctrAndCTA: CTRAndCTAConfig;
-  customDirectives: string;
+  serp?: SERPConfig;
+  topicalAuthority?: TopicalAuthorityConfig;
+  styleAndTone?: StyleAndToneConfig;
+  internalLinking?: InternalLinkingConfig;
+  externalCitations?: ExternalCitationItem[];
+  visualElements?: VisualElementType[];
+  schemaAndEEAT?: SchemaAndEEATConfig;
+  ctrAndCTA?: CTRAndCTAConfig;
+  customDirectives?: string;
+  aiImagePrompts?: AIImagePromptItem[];
+  contentStructure?: any;
+  linkingStrategy?: any;
+  socialPrompts?: any;
+  advancedTechnical?: any;
+  aiOptimization?: any;
+  eeatConfig?: any;
+  secondaryCTA?: any;
   createdAt: string;
   updatedAt: string;
+  [key: string]: any;
 }
 
 export interface AIImagePromptItem {
@@ -287,13 +340,6 @@ export interface SmartRecommendation {
   category: string;
 }
 
-export interface PresetTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  articleLength: string;
-  contentType: ContentType;
-  intent: SearchIntentType;
-  defaults: Partial<SEOProject>;
-}
+export * from './contentPlan';
+export * from './seoAnalytics';
+export * from './knowledgeGraph';

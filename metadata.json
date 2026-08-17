@@ -1,6 +1,6 @@
 {
-  "name": "AhanInja SEO Prompt Intelligence Builder",
-  "description": "سیستم پیشرفته و اختصاصی مهندسی پرامپت سئو، هویت بصری، شبکه‌های اجتماعی و محاسبات مهندسی آهن و فولاد برای آهن اینجا.",
+  "name": "AhanInja SEO Content Intelligence Platform",
+  "description": "سیستم جامع هوشمندسازی استراتژی سئو، تولید خودکار جدول محتوا، مهندسی پرامپت مقاله و تصاویر، تحلیل سرچ کنسول و پایگاه دانش فولاد برای آهن اینجا.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -59,3 +59,5 @@ export function generateAIImagePrompts(
     }
   ];
 }
+
+export const generateImagePrompts = generateAIImagePrompts;

@@ -1,163 +1,169 @@
 import React from 'react';
-import { useAppStore } from '../store/useAppStore';
-import { TRANSLATIONS } from '../i18n/translations';
+import { useAppStore, AppView } from '../store/useAppStore';
 import {
   Sparkles,
-  LayoutDashboard,
-  Layers,
-  Building2,
+  Table,
+  BarChart3,
+  ListTodo,
+  Compass,
+  Calendar,
+  Bot,
+  Network,
+  Link2,
+  FileSpreadsheet,
+  Upload,
   FileCode,
-  Globe2,
-  ChevronDown,
-  FileText,
+  Building2,
+  CheckCircle2,
   Plus
 } from 'lucide-react';
-import { LanguageCode } from '../types';
-
-const LANGUAGES: { code: LanguageCode; label: string }[] = [
-  { code: 'fa', label: 'فارسی' },
-  { code: 'en', label: 'English' },
-  { code: 'ar', label: 'العربية' },
-  { code: 'es', label: 'Español' },
-  { code: 'ru', label: 'Русский' }
-];
+import { exportContentPlanToExcel } from '../engine/excelEngine';
 
 export const Header: React.FC = () => {
   const {
     activeView,
     setActiveView,
-    language,
-    setLanguage,
-    projects,
-    currentProject,
-    selectProject,
-    createProject,
-    setPresetsModalOpen,
+    contentPlan,
+    currentBrand,
+    setExcelImportModalOpen,
     setBrandModalOpen,
+    setPresetsModalOpen,
+    setPromptPreviewOpen,
     compilePrompt,
-    setPromptPreviewOpen
+    showNotification
   } = useAppStore();
 
-  const t = TRANSLATIONS[language];
+  const handleExportExcel = () => {
+    exportContentPlanToExcel(contentPlan, `AhanInja_SEO_Content_Matrix_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showNotification('فایل اکسل با ۵۰ ستون کامل دانلود شد.', 'success');
+  };
 
   const handleQuickCompile = () => {
     compilePrompt();
     setPromptPreviewOpen(true);
   };
 
+  const navItems: { view: AppView; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { view: 'content-plan', label: 'جدول جامع محتوا', icon: Table },
+    { view: 'seo-dashboard', label: 'عملیات و فرصت‌ها', icon: BarChart3 },
+    { view: 'task-center', label: 'مرکز تسک‌های سئو', icon: ListTodo },
+    { view: 'wizard', label: 'ویزارد پرامپت', icon: Compass },
+    { view: 'roadmap', label: 'نقشه راه و تقویم', icon: Calendar },
+    { view: 'copilot', label: 'دستیار AI سئو', icon: Bot },
+    { view: 'knowledge-graph', label: 'پایگاه دانش فولاد', icon: Network },
+    { view: 'integrations', label: 'اتصالات گوگل', icon: Link2 }
+  ];
+
   return (
-    <header className="bg-slate-950/80 border-b border-slate-800/80 sticky top-0 z-40 backdrop-blur-md px-4 py-3" id="app-header">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Logo & Brand Identity */}
-        <div className="flex items-center gap-3 self-start md:self-auto">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-teal-400 p-0.5 shadow-lg shadow-indigo-600/30 flex items-center justify-center">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-indigo-400" />
+    <header className="bg-slate-950/90 border-b border-slate-800/90 sticky top-0 z-40 backdrop-blur-lg px-4 py-2.5" id="app-header">
+      <div className="max-w-7xl mx-auto flex flex-col xl:flex-row items-center justify-between gap-3">
+        {/* Brand & Platform Identity */}
+        <div className="flex items-center justify-between w-full xl:w-auto gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-500 to-indigo-500 p-0.5 shadow-md shadow-amber-500/20 flex items-center justify-center">
+              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-black text-white tracking-tight">
+                  آهن اینجا <span className="text-amber-400 font-medium text-xs">| AhanInja SEO Intelligence</span>
+                </h1>
+                <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded-md font-mono">
+                  v4.0 Matrix
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                سیستم جامع هوشمندسازی محتوا، همگام‌سازی اکسل، سرچ کنسول و پایگاه دانش فولاد
+              </p>
             </div>
           </div>
-          <div>
-            <h1 className="text-sm font-black text-white tracking-wide flex items-center gap-2">
-              SEO Content Intelligence Prompt Builder
-              <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full font-mono">
-                v2.5
-              </span>
-            </h1>
-            <p className="text-[11px] text-slate-400 font-sans">
-              استودیوی حرفه‌ای ساخت پرامپت‌های مستر سئو و تولید محتوای هوش مصنوعی
-            </p>
-          </div>
-        </div>
 
-        {/* Center Navigation Tabs */}
-        <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-2xl">
-          <button
-            type="button"
-            onClick={() => setActiveView('wizard')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeView === 'wizard'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            {t.tabs.wizard}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveView('dashboard')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeView === 'dashboard'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <LayoutDashboard className="w-3.5 h-3.5" />
-            {t.tabs.dashboard}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setPresetsModalOpen(true)}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            {t.tabs.presets}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setBrandModalOpen(true)}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-            {t.tabs.brands}
-          </button>
-        </div>
-
-        {/* Right Actions: Quick Project Selector, Compile Master Prompt, Language Switcher */}
-        <div className="flex items-center gap-2.5 self-end md:self-auto">
-          {/* Project Switcher */}
-          <div className="hidden sm:flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1 text-xs">
-            <FileText className="w-3.5 h-3.5 text-indigo-400" />
-            <select
-              value={currentProject?.id}
-              onChange={(e) => selectProject(e.target.value)}
-              className="bg-transparent text-slate-200 text-xs font-bold focus:outline-none max-w-[140px] truncate"
+          {/* Mobile Fast Action Buttons */}
+          <div className="flex xl:hidden items-center gap-2">
+            <button
+              onClick={handleExportExcel}
+              className="p-1.5 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs"
+              title="خروجی اکسل"
             >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id} className="bg-slate-900 text-white">
-                  {p.articleTitle || p.topic}
-                </option>
-              ))}
-            </select>
+              <FileSpreadsheet className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setExcelImportModalOpen(true)}
+              className="p-1.5 bg-slate-900 text-slate-200 border border-slate-800 rounded-lg text-xs"
+              title="ورودی اکسل"
+            >
+              <Upload className="w-4 h-4" />
+            </button>
           </div>
+        </div>
 
-          {/* Quick Compile Trigger */}
+        {/* Center Primary Nav Tabs */}
+        <nav className="flex items-center overflow-x-auto no-scrollbar gap-1 bg-slate-900/80 border border-slate-800/80 p-1 rounded-xl max-w-full">
+          {navItems.map(item => {
+            const Icon = item.icon;
+            const isActive = activeView === item.view;
+            return (
+              <button
+                key={item.view}
+                onClick={() => setActiveView(item.view)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                  isActive
+                    ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-black'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-950' : 'text-slate-400'}`} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right Action Tools */}
+        <div className="hidden xl:flex items-center gap-2">
+          {/* Excel Export Button */}
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="px-2.5 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            title="خروجی اکسل ۵۰ ستونه"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            خروجی اکسل
+          </button>
+
+          {/* Excel Import Button */}
+          <button
+            type="button"
+            onClick={() => setExcelImportModalOpen(true)}
+            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/60 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            title="ورود فایل اکسل یا CSV"
+          >
+            <Upload className="w-3.5 h-3.5 text-indigo-400" />
+            ورودی اکسل
+          </button>
+
+          {/* Quick Master Prompt Preview */}
           <button
             type="button"
             onClick={handleQuickCompile}
-            className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-sm shadow-amber-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <FileCode className="w-3.5 h-3.5" />
-            کامپایل فوری
+            پرامپت مستر
           </button>
 
-          {/* Language Switcher */}
-          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl px-2 py-1">
-            <Globe2 className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-              className="bg-transparent text-slate-300 text-xs font-semibold focus:outline-none cursor-pointer"
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code} className="bg-slate-900 text-white">
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Brand Profile Button */}
+          <button
+            type="button"
+            onClick={() => setBrandModalOpen(true)}
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-slate-400 hover:text-slate-200 transition-all cursor-pointer"
+            title="پروفایل برند آهن اینجا"
+          >
+            <Building2 className="w-4 h-4 text-amber-400" />
+          </button>
         </div>
       </div>
     </header>

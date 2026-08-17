@@ -15,7 +15,10 @@ import {
   FileCode,
   Building2,
   CheckCircle2,
-  Plus
+  Plus,
+  ShieldCheck,
+  Zap,
+  Activity
 } from 'lucide-react';
 import { exportContentPlanToExcel } from '../engine/excelEngine';
 
@@ -25,6 +28,8 @@ export const Header: React.FC = () => {
     setActiveView,
     contentPlan,
     currentBrand,
+    mode,
+    setMode,
     setExcelImportModalOpen,
     setBrandModalOpen,
     setPresetsModalOpen,
@@ -44,8 +49,9 @@ export const Header: React.FC = () => {
   };
 
   const navItems: { view: AppView; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { view: 'content-plan', label: 'جدول جامع محتوا', icon: Table },
+    { view: 'content-plan', label: 'جدول ۵۰ فیلدی محتوا', icon: Table },
     { view: 'seo-dashboard', label: 'عملیات و فرصت‌ها', icon: BarChart3 },
+    { view: 'audit-suite', label: 'حسابرسی فنی ۱۲ گانه', icon: ShieldCheck },
     { view: 'task-center', label: 'مرکز تسک‌های سئو', icon: ListTodo },
     { view: 'wizard', label: 'ویزارد پرامپت', icon: Compass },
     { view: 'roadmap', label: 'نقشه راه و تقویم', icon: Calendar },
@@ -70,12 +76,21 @@ export const Header: React.FC = () => {
                 <h1 className="text-sm font-black text-white tracking-tight">
                   آهن اینجا <span className="text-amber-400 font-medium text-xs">| AhanInja SEO Intelligence</span>
                 </h1>
-                <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded-md font-mono">
-                  v4.0 Matrix
-                </span>
+                <button
+                  onClick={() => setMode(mode === 'production' ? 'demo' : 'production')}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center gap-1 cursor-pointer transition-colors ${
+                    mode === 'production'
+                      ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
+                  }`}
+                  title="تغییر وضعیت بین حالت پروداکشن واقعی و دمو"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${mode === 'production' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  {mode === 'production' ? 'PROD LIVE' : 'DEMO MODE'}
+                </button>
               </div>
               <p className="text-[11px] text-slate-400">
-                سیستم جامع هوشمندسازی محتوا، همگام‌سازی اکسل، سرچ کنسول و پایگاه دانش فولاد
+                موتور سئو ۱۲ مرحله‌ای، ماتریس ۵۰ فیلد، همگام‌سازی اکسل، سرچ کنسول و پایگاه دانش فولاد
               </p>
             </div>
           </div>
@@ -108,7 +123,7 @@ export const Header: React.FC = () => {
               <button
                 key={item.view}
                 onClick={() => setActiveView(item.view)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                   isActive
                     ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-black'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'

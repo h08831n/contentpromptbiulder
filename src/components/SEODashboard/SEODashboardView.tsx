@@ -13,7 +13,8 @@ import {
   BarChart3,
   Search,
   Eye,
-  RefreshCw
+  RefreshCw,
+  ListPlus
 } from 'lucide-react';
 import { calculateSEOHealthScore } from '../../engine/seoOpportunityEngine';
 
@@ -27,6 +28,9 @@ export const SEODashboardView: React.FC = () => {
     cannibalizations,
     contentDecays,
     addContentPlanRow,
+    convertGapToTask,
+    convertCannibalizationToTask,
+    convertDecayToTask,
     setActiveView,
     showNotification
   } = useAppStore();
@@ -66,8 +70,20 @@ export const SEODashboardView: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto">
+          {/* Quick Actions & Audit Suite Launcher */}
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+            <button
+              onClick={() => setActiveView('audit-suite')}
+              className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              اجرای حسابرسی فنی ۱۲ گانه (Forensic Suite)
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-slate-800/80">
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
               <span className="text-xs text-slate-400 block">کلیک ارگانیک ۲۸ روزه</span>
               <span className="text-base font-black text-white font-mono mt-0.5 block">
@@ -93,7 +109,6 @@ export const SEODashboardView: React.FC = () => {
               </span>
             </div>
           </div>
-        </div>
 
         {/* Sub Scores Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-6 pt-6 border-t border-slate-800/80">
@@ -256,14 +271,30 @@ export const SEODashboardView: React.FC = () => {
           <div className="space-y-3">
             {cannibalizations.map(can => (
               <div key={can.id} className="bg-slate-900 border border-amber-500/30 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-white">کلمه کلیدی دارای تداخل:</span>
                     <span className="text-xs font-bold text-amber-400">{can.query}</span>
                   </div>
-                  <span className="text-xs bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
-                    اقدام: {can.recommendedAction}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
+                      اقدام: {can.recommendedAction}
+                    </span>
+                    <button
+                      onClick={() => convertCannibalizationToTask({
+                        id: can.id,
+                        query: can.query,
+                        urlA: can.conflictingUrls[0]?.url || '',
+                        urlB: can.conflictingUrls[1]?.url || '',
+                        severity: 'Critical',
+                        recommendedAction: can.recommendedAction
+                      })}
+                      className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <ListPlus className="w-3.5 h-3.5" />
+                      تبدیل به تسک رفع تداخل
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -312,7 +343,7 @@ export const SEODashboardView: React.FC = () => {
                   <p className="text-xs font-mono text-slate-400">{dec.pageUrl}</p>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-3 text-xs">
                   <div className="text-center">
                     <span className="text-slate-500 block text-[10px]">افت ترافیک</span>
                     <span className="text-rose-400 font-bold font-mono">-{dec.percentageLoss}%</span>
@@ -322,10 +353,25 @@ export const SEODashboardView: React.FC = () => {
                     <span className="text-amber-400 font-bold font-mono">{dec.previousPosition} → {dec.currentPosition}</span>
                   </div>
                   <button
-                    onClick={() => handleConvertGapToContent(`بروزرسانی: ${dec.title}`)}
-                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow"
+                    onClick={() => convertDecayToTask({
+                      id: dec.id,
+                      url: dec.pageUrl,
+                      decayScore: dec.percentageLoss,
+                      clickDeclinePercent: dec.percentageLoss,
+                      previousPosition: dec.previousPosition,
+                      currentPosition: dec.currentPosition,
+                      recommendedAction: 'بازنویسی بخش‌های فرسوده، بروزرسانی قیمت روز و جدول اشتال'
+                    })}
+                    className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
                   >
-                    بروزرسانی فوری
+                    <ListPlus className="w-3.5 h-3.5" />
+                    ثبت تسک
+                  </button>
+                  <button
+                    onClick={() => handleConvertGapToContent(`بروزرسانی: ${dec.title}`)}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all shadow cursor-pointer"
+                  >
+                    بروزرسانی در ماتریس
                   </button>
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { useAppStore } from './store/useAppStore';
 import { Header } from './components/Header';
 import { ContentPlanView } from './components/ContentPlanMatrix/ContentPlanView';
 import { SEODashboardView } from './components/SEODashboard/SEODashboardView';
+import { ForensicAuditView } from './components/AuditSuite/ForensicAuditView';
 import { TaskCenterView } from './components/TaskCenter/TaskCenterView';
 import { Wizard } from './components/Wizard';
 import { RoadmapCalendarView } from './components/RoadmapCalendar/RoadmapCalendarView';
@@ -62,6 +63,7 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {activeView === 'content-plan' && <ContentPlanView />}
         {activeView === 'seo-dashboard' && <SEODashboardView />}
+        {activeView === 'audit-suite' && <ForensicAuditView />}
         {activeView === 'task-center' && <TaskCenterView />}
         {activeView === 'wizard' && <Wizard />}
         {activeView === 'roadmap' && <RoadmapCalendarView />}

@@ -267,12 +267,22 @@ const INITIAL_TASKS = generateSEOTasks(
 export type AppView =
   | 'content-plan'
   | 'seo-dashboard'
+  | 'audit-suite'
   | 'wizard'
   | 'task-center'
   | 'roadmap'
   | 'copilot'
   | 'knowledge-graph'
   | 'integrations';
+
+export interface BulkQueueStatus {
+  isProcessing: boolean;
+  total: number;
+  completed: number;
+  processing: number;
+  failed: number;
+  pending: number;
+}
 
 interface AppState {
   projects: SEOProject[];
@@ -295,6 +305,8 @@ interface AppState {
   activeStep: number;
   activeView: AppView;
   language: LanguageCode;
+  mode: 'production' | 'demo';
+  bulkQueue: BulkQueueStatus;
   isPromptPreviewOpen: boolean;
   isBrandModalOpen: boolean;
   isPresetsModalOpen: boolean;
@@ -355,6 +367,8 @@ function loadInitialState(): AppState {
         activeStep: parsed.activeStep || 1,
         activeView: parsed.activeView || 'content-plan',
         language: parsed.language || 'fa',
+        mode: parsed.mode || 'production',
+        bulkQueue: { isProcessing: false, total: 0, completed: 0, processing: 0, failed: 0, pending: 0 },
         isPromptPreviewOpen: false,
         isBrandModalOpen: false,
         isPresetsModalOpen: false,
@@ -390,6 +404,8 @@ function loadInitialState(): AppState {
     activeStep: 1,
     activeView: 'content-plan',
     language: 'fa',
+    mode: 'production',
+    bulkQueue: { isProcessing: false, total: 0, completed: 0, processing: 0, failed: 0, pending: 0 },
     isPromptPreviewOpen: false,
     isBrandModalOpen: false,
     isPresetsModalOpen: false,
@@ -795,6 +811,116 @@ export function useAppStore() {
     notify();
   };
 
+  const setMode = (mode: 'production' | 'demo') => {
+    globalState.mode = mode;
+    showNotification(
+      mode === 'production'
+        ? 'حالت پروداکشن (Production Mode) فعال شد. داده‌ها مستقیماً از موتور و پایگاه دانش استخراج می‌شوند.'
+        : 'حالت نمایشی (Demo Mode) فعال شد.',
+      'info'
+    );
+    notify();
+  };
+
+  const processBulkQueue = async (titles: string[]) => {
+    if (!titles.length) return;
+    const total = titles.length;
+    globalState.bulkQueue = {
+      isProcessing: true,
+      total,
+      completed: 0,
+      processing: Math.min(8, total),
+      failed: 0,
+      pending: Math.max(0, total - 8)
+    };
+    notify();
+
+    const createdRows: ContentPlanRow[] = [];
+    for (let i = 0; i < titles.length; i++) {
+      const title = titles[i];
+      try {
+        const row = generateAutoContentPlanRow(title, currentBrand, currentWebsite);
+        createdRows.push(row);
+        globalState.bulkQueue = {
+          isProcessing: true,
+          total,
+          completed: i + 1,
+          processing: Math.min(8, total - i - 1),
+          failed: globalState.bulkQueue.failed,
+          pending: Math.max(0, total - (i + 1) - Math.min(8, total - i - 1))
+        };
+        notify();
+        // small yielding delay for UI responsive rendering
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 20));
+      } catch (err) {
+        globalState.bulkQueue.failed += 1;
+        notify();
+      }
+    }
+
+    globalState.contentPlan = [...createdRows, ...globalState.contentPlan];
+    globalState.bulkQueue = {
+      isProcessing: false,
+      total,
+      completed: createdRows.length,
+      processing: 0,
+      failed: globalState.bulkQueue.failed,
+      pending: 0
+    };
+    showNotification(`صف پردازش دسته‌ای به پایان رسید (${createdRows.length} ردیف اضافه شد).`, 'success');
+    notify();
+  };
+
+  const convertGapToTask = (gap: any) => {
+    const newTask: SEOTaskItem = {
+      id: 'task-gap-' + Date.now(),
+      title: `بهینه‌سازی کلمه در آستانه رتبه ۱: «${gap.query || gap.suggestedTopic}»`,
+      description: `این کلمه کلیدی با ایمپرشن بالا (${(gap.impressions || gap.searchVolume || 0).toLocaleString()}) نیازمند بروزرسانی محتوا یا ایجاد مقاله جدید است.`,
+      category: 'CONTENT',
+      priority: (gap.priority || 'High') as any,
+      status: 'TODO',
+      associatedUrl: gap.targetUrl,
+      associatedKeyword: gap.query || gap.primaryKeyword,
+      createdAt: new Date().toISOString()
+    };
+    globalState.seoTasks = [newTask, ...globalState.seoTasks];
+    showNotification(`فرصت سئو به تسک «${newTask.title}» تبدیل شد.`, 'success');
+    notify();
+  };
+
+  const convertCannibalizationToTask = (cann: CannibalizationItem) => {
+    const newTask: SEOTaskItem = {
+      id: 'task-cann-' + Date.now(),
+      title: `رفع هم‌پوشانی (Cannibalization) برای کلمه «${cann.query}»`,
+      description: `دو صفحه ${cann.urlA} و ${cann.urlB} روی این کلمه رقابت دارند. اقدام پیشنهادی: ${cann.recommendedAction}`,
+      category: 'TECHNICAL',
+      priority: cann.severity === 'Critical' ? 'High' : 'Medium',
+      status: 'TODO',
+      associatedUrl: cann.urlA,
+      associatedKeyword: cann.query,
+      createdAt: new Date().toISOString()
+    };
+    globalState.seoTasks = [newTask, ...globalState.seoTasks];
+    showNotification(`تسک رفع کانیبالیزیشن با موفقیت ثبت شد.`, 'success');
+    notify();
+  };
+
+  const convertDecayToTask = (decay: ContentDecayItem) => {
+    const newTask: SEOTaskItem = {
+      id: 'task-decay-' + Date.now(),
+      title: `نوسازی صفحه افت کرده (Content Decay): «${decay.url}»`,
+      description: `افت کلیک ${decay.clickDeclinePercent}% و افت جایگاه از ${decay.previousPosition} به ${decay.currentPosition}. اقدام: ${decay.recommendedAction}`,
+      category: 'CONTENT',
+      priority: decay.decayScore > 75 ? 'High' : 'Medium',
+      status: 'TODO',
+      associatedUrl: decay.url,
+      createdAt: new Date().toISOString()
+    };
+    globalState.seoTasks = [newTask, ...globalState.seoTasks];
+    showNotification(`تسک نوسازی محتوای زوال‌یافته ثبت شد.`, 'success');
+    notify();
+  };
+
   const compilePrompt = () => {
     const res = compileMasterSEOPrompt(currentProject, currentBrand, currentWebsite);
     globalState.generatedPromptResult = res;
@@ -825,6 +951,8 @@ export function useAppStore() {
     activeStep: state.activeStep,
     activeView: state.activeView,
     language: state.language,
+    mode: state.mode,
+    bulkQueue: state.bulkQueue,
     isPromptPreviewOpen: state.isPromptPreviewOpen,
     isBrandModalOpen: state.isBrandModalOpen,
     isPresetsModalOpen: state.isPresetsModalOpen,
@@ -837,6 +965,11 @@ export function useAppStore() {
     // Actions
     setActiveView,
     setActiveStep,
+    setMode,
+    processBulkQueue,
+    convertGapToTask,
+    convertCannibalizationToTask,
+    convertDecayToTask,
     nextStep,
     prevStep,
     showNotification,

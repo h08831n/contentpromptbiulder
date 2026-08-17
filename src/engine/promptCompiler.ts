@@ -198,3 +198,5 @@ ${project.ctrAndCTA.localCityOrProvince ? `- Local Geo-Targeting: ${project.ctrA
     steelCalculationsSnippet: STEEL_FORMULAS.map(f => `${f.name}: ${f.formula}`).join(' | ')
   };
 }
+
+export const compileSEOMasterPrompt = compileMasterSEOPrompt;

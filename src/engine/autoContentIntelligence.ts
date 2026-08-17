@@ -575,3 +575,5 @@ https://ahaninja.com/blog/${slug}
 
   return mergedRow;
 }
+
+export const autoGenerate50FieldContentRow = generateAutoContentPlanRow;
